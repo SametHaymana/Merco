@@ -6,22 +6,23 @@
   filter: drop-shadow(0 0 2em #61dafb);
 }
 :root {
-  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
+  font-family: 'Orbitron', sans-serif; /* Suggesting a futuristic font - requires import or webfont link */
+  /* Or stick with system fonts: Inter, Avenir, Helvetica, Arial, sans-serif */
   font-size: 16px;
-  line-height: 1.6; /* Slightly adjusted line height */
+  line-height: 1.6;
   font-weight: 400;
 
-  /* Color Scheme */
-  --primary-blue: #2a4d69;
-  --secondary-orange: #f58634;
-  --light-bg: #f8f9fa;
-  --text-light: #ffffff;
-  --text-dark: #343a40;
-  --hover-blue: #4b86b4;
-  --border-color: #dee2e6;
+  /* Futuristic AI Color Scheme */
+  --dark-bg: #1a1a1a; /* Very dark grey / near black */
+  --primary-gold: #daa520; /* Gold accent */
+  --secondary-cyan: #00ffff; /* Electric cyan highlight */
+  --light-text: #e0e0e0; /* Light grey text for contrast */
+  --dark-text: #333333; /* Dark text for light backgrounds (if any) */
+  --hover-gold: #f0c43e; /* Lighter gold for hover */
+  --border-color: #444444; /* Darker border */
 
-  color: var(--text-dark);
-  background-color: var(--light-bg);
+  color: var(--light-text); /* Default text color on dark bg */
+  background-color: var(--dark-bg); /* Dark background */
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -30,11 +31,14 @@
   -webkit-text-size-adjust: 100%;
 }
 
+/* Optional: Import Orbitron font if using */
+/* @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap'); */
+
 body {
   margin: 0;
-  font-family: inherit; /* Inherit from :root */
-  background-color: var(--light-bg);
-  color: var(--text-dark);
+  font-family: inherit;
+  background-color: var(--dark-bg); /* Ensure body bg is dark */
+  color: var(--light-text); /* Ensure body text is light */
 }
 
 .container {
@@ -47,20 +51,20 @@ body {
   transition: padding-left 0.3s ease-in-out; /* Keep this for sidebar interaction */
 }
 
-/* General link styling (optional, adjust as needed) */
-/* a {
-  color: var(--primary-blue);
+/* General link styling (optional) */
+a {
+  color: var(--secondary-cyan); /* Cyan links */
   text-decoration: none;
   transition: color 0.2s ease-in-out;
 }
 
 a:hover {
-  color: var(--secondary-orange);
-} */
+  color: var(--hover-gold); /* Gold hover for links */
+}
 
 h1, h2, h3, h4, h5, h6 {
-  color: var(--primary-blue); /* Use primary blue for headings */
-  margin-top: 0; /* Remove default top margin */
+  color: var(--primary-gold); /* Gold headings */
+  margin-top: 0;
 }
 
 /* Removed .logo, .row, #greet-input, button, media query styles */
