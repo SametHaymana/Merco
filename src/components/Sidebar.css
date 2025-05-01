@@ -1,0 +1,91 @@
+.sidebar {
+  position: fixed;
+  /* Use transform for smoother animation */
+  transform: translateX(-100%);
+  left: 0; /* Keep left: 0 for positioning context */
+  top: 0;
+  height: 100%;
+  width: 250px;
+  background-color: var(--primary-blue); /* Use blue background */
+  padding-top: 70px; /* Increased padding for toggle */
+  transition: transform 0.3s ease-in-out; /* Transition transform */
+  z-index: 10;
+  border-right: 1px solid var(--hover-blue); /* Slightly lighter border */
+  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1); /* Add subtle shadow */
+}
+
+.sidebar.open {
+  transform: translateX(0%); /* Slide in */
+}
+
+.sidebar ul {
+  list-style: none;
+  padding: 0 10px; /* Add horizontal padding to UL */
+  margin: 0;
+}
+
+.sidebar ul li {
+  padding: 0; /* Remove padding from li, add to a */
+  margin-bottom: 5px; /* Space between items */
+}
+
+.sidebar ul li a {
+  text-decoration: none;
+  color: var(--text-light); /* Light text on dark background */
+  display: flex;
+  align-items: center;
+  padding: 12px 20px; /* Slightly larger clickable area */
+  transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out; /* Add color transition */
+  border-radius: 6px; /* Slightly more rounded */
+  margin: 0; /* Remove margin from a */
+}
+
+.sidebar ul li a:hover {
+  background-color: var(--hover-blue); /* Use lighter blue for hover */
+  color: var(--text-light);
+}
+
+/* Style for the active link maybe? We can add this later if needed */
+/* .sidebar ul li a.active { */
+/*  background-color: var(--secondary-orange); */
+/*  color: var(--text-light); */
+/* } */
+
+.sidebar ul li a span {
+  margin-left: 15px; /* Increase space between icon and text */
+}
+
+.sidebar-toggle {
+  position: fixed;
+  top: 15px;
+  left: 15px;
+  z-index: 20;
+  background: none; /* Remove default background */
+  border: none;
+  padding: 10px;
+  cursor: pointer;
+  color: var(--primary-blue); /* Make toggle icon blue */
+  font-size: 1.6rem; /* Slightly larger toggle icon */
+  transition: color 0.2s ease-in-out, transform 0.3s ease-in-out; /* Add transform transition */
+}
+
+.sidebar-toggle:hover {
+  color: var(--secondary-orange); /* Orange hover for toggle */
+}
+
+/* Move toggle button when sidebar opens */
+.sidebar.open + .sidebar-toggle {
+  /* Optional: move toggle slightly or change appearance when open */
+  /* Example: transform: translateX(255px); */
+}
+
+/* Adjust main content padding when sidebar might be open */
+.container.sidebar-open {
+  padding-left: 270px; /* Adjust as needed (sidebar width + some margin) */
+  transition: padding-left 0.3s ease-in-out;
+}
+
+.container {
+  padding-left: 70px; /* Default padding to account for closed sidebar/toggle */
+  transition: padding-left 0.3s ease-in-out;
+} 

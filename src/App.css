@@ -1,0 +1,66 @@
+.logo.vite:hover {
+  filter: drop-shadow(0 0 2em #747bff);
+}
+
+.logo.react:hover {
+  filter: drop-shadow(0 0 2em #61dafb);
+}
+:root {
+  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.6; /* Slightly adjusted line height */
+  font-weight: 400;
+
+  /* Color Scheme */
+  --primary-blue: #2a4d69;
+  --secondary-orange: #f58634;
+  --light-bg: #f8f9fa;
+  --text-light: #ffffff;
+  --text-dark: #343a40;
+  --hover-blue: #4b86b4;
+  --border-color: #dee2e6;
+
+  color: var(--text-dark);
+  background-color: var(--light-bg);
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: inherit; /* Inherit from :root */
+  background-color: var(--light-bg);
+  color: var(--text-dark);
+}
+
+.container {
+  /* Removed old flex centering */
+  /* Adjusted padding calculation in Sidebar.css handles left padding */
+  padding-top: 2rem; /* Add some top padding */
+  padding-right: 2rem; /* Add right padding */
+  padding-bottom: 2rem; /* Add bottom padding */
+  /* Default left padding handled by .container in Sidebar.css */
+  transition: padding-left 0.3s ease-in-out; /* Keep this for sidebar interaction */
+}
+
+/* General link styling (optional, adjust as needed) */
+/* a {
+  color: var(--primary-blue);
+  text-decoration: none;
+  transition: color 0.2s ease-in-out;
+}
+
+a:hover {
+  color: var(--secondary-orange);
+} */
+
+h1, h2, h3, h4, h5, h6 {
+  color: var(--primary-blue); /* Use primary blue for headings */
+  margin-top: 0; /* Remove default top margin */
+}
+
+/* Removed .logo, .row, #greet-input, button, media query styles */
