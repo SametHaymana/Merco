@@ -1,4 +1,3 @@
-
 pub struct Task {
     pub description: String,
     pub expected_output: Option<String>,
@@ -6,7 +5,9 @@ pub struct Task {
 
 impl Task {
     pub fn new(description: String, expected_output: Option<String>) -> Self {
-        Self { description, expected_output }
+        Self {
+            description,
+            expected_output,
+        }
     }
 }
-

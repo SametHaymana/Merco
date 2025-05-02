@@ -245,7 +245,7 @@ impl LlmProvider for OllamaProvider {
              ));
         }
 
-        let mut messages = request.messages.clone();
+        let mut original_messages = request.messages.clone();
         let mut use_json_format = false;
 
         // Modify prompt and set format if tools are present
@@ -254,26 +254,42 @@ impl LlmProvider for OllamaProvider {
                 use_json_format = true;
                 let tool_prompt = Self::format_tools_for_prompt(tools);
 
-                // Find or create a system prompt
-                if let Some(system_message) = messages.iter_mut().find(|m| m.role == ChatMessageRole::System) {
+                // Find or create a system prompt in the original messages
+                if let Some(system_message) = original_messages.iter_mut().find(|m| m.role == ChatMessageRole::System) {
                     let existing_content = system_message.content.take().unwrap_or_default();
                     system_message.content = Some(format!("{}\n\n{}", existing_content, tool_prompt));
                 } else {
                     // Prepend a new system prompt
-                    messages.insert(0, ChatMessage {
+                    original_messages.insert(0, ChatMessage {
                         role: ChatMessageRole::System,
                         content: Some(tool_prompt),
-                        tool_calls: None,
+                        tool_calls: None, // System prompts don't have tool calls
                         tool_call_id: None,
                     });
                 }
             }
         }
 
+        // Create a sanitized version of messages specifically for the Ollama API request,
+        // removing fields Ollama doesn't expect in the input history.
+        let messages_for_ollama_request: Vec<ChatMessage> = original_messages
+            .into_iter()
+            .map(|mut msg| {
+                // Ollama API doesn't use tool_calls or tool_call_id in the request messages list.
+                // Keep content and role.
+                msg.tool_calls = None;
+                // While Ollama doesn't use tool_call_id either, keeping it doesn't seem to cause errors
+                // based on current Ollama API behavior, but we could clear it too if needed.
+                // msg.tool_call_id = None;
+                msg
+            })
+            .collect();
+
+
         let ollama_request = OllamaChatRequest {
             model: request.model.clone(),
-            messages,
-            stream: false, // Streaming handled separately
+            messages: messages_for_ollama_request, // Use the sanitized messages
+            stream: false,
             format: if use_json_format { Some("json".to_string()) } else { None },
             options: Self::create_ollama_options(&request),
         };

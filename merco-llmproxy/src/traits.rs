@@ -96,6 +96,26 @@ impl ChatMessage {
     pub fn new(role: ChatMessageRole, content: Option<String>, tool_calls: Option<Vec<ToolCallRequest>>, tool_call_id: Option<String>) -> Self {
         Self { role, content, tool_calls, tool_call_id }
     }
+    
+    // Helper for creating a user message
+    pub fn user(content: String) -> Self {
+        Self { role: ChatMessageRole::User, content: Some(content), tool_calls: None, tool_call_id: None }
+    }
+    
+    // Helper for creating a system message
+    pub fn system(content: String) -> Self {
+        Self { role: ChatMessageRole::System, content: Some(content), tool_calls: None, tool_call_id: None }
+    }
+
+    // Helper for creating an assistant message
+    pub fn assistant(content: Option<String>, tool_calls: Option<Vec<ToolCallRequest>>) -> Self {
+         Self { role: ChatMessageRole::Assistant, content, tool_calls, tool_call_id: None }
+    }
+
+    // Helper for creating a tool result message
+    pub fn tool_result(tool_call_id: String, content: String) -> Self {
+         Self { role: ChatMessageRole::Tool, content: Some(content), tool_calls: None, tool_call_id: Some(tool_call_id) }
+    }
 }
 
 /// Represents a tool call requested by the LLM assistant.
@@ -103,8 +123,21 @@ impl ChatMessage {
 pub struct ToolCallRequest {
     /// A unique identifier for this specific tool call instance.
     pub id: String,
+    /// The type of the tool call. Always "function" for now.
+    #[serde(rename = "type")] // Ensure it serializes as "type"
+    pub tool_type: String,
     /// The function details for the call.
     pub function: ToolCallFunction,
+}
+
+impl ToolCallRequest {
+    pub fn new_function_call(id: String, function: ToolCallFunction) -> Self {
+        Self {
+            id,
+            tool_type: "function".to_string(), // Always set to function
+            function,
+        }
+    }
 }
 
 /// Details of the function being called in a `ToolCallRequest`.
