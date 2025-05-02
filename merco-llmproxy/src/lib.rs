@@ -43,11 +43,26 @@ use std::sync::Arc;
 /// # Examples
 ///
 /// ```no_run
-/// use merco_llmproxy::{LlmConfig, Provider, get_provider};
+/// use merco_llmproxy::{LlmConfig, Provider, get_provider, CompletionRequest, ChatMessage};
 ///
-/// let config = LlmConfig::new(Provider::Ollama, "qwen3:4b".to_string());
+/// let config = LlmConfig::new(Provider::Ollama)
+///     .with_base_url("http://localhost:11434".to_string()); // Optional, default assumed if Ollama
+///
+/// // Validate the config early (optional, but good practice)
+/// config.validate().expect("Invalid config");
+///
 /// let provider = get_provider(config).expect("Failed to get provider");
-/// // Now use the provider methods...
+///
+/// // Example request (model specified here)
+/// let request = CompletionRequest {
+///     model: "qwen3:4b".to_string(),
+///     messages: vec![ChatMessage::user("Why is the sky blue?".to_string())],
+///     // ... other request options
+///     ..Default::default()
+/// };
+///
+/// // Now use the provider methods with the request...
+/// // let response = provider.completion(request).await;
 /// ```
 pub fn get_provider(config: LlmConfig) -> Result<Arc<dyn LlmProvider>, ProviderError> {
     config.validate().map_err(|e| ProviderError::ConfigError(e.to_string()))?;

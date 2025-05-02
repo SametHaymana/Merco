@@ -39,24 +39,26 @@ thiserror = "1.0"
 
 ### 1. Configuration
 
-Create an `LlmConfig` specifying the provider, model, and any necessary credentials or URLs.
+Create an `LlmConfig` specifying the provider, and any necessary credentials or URLs. The model is specified per-request.
 
 ```rust
 use merco_llmproxy::{LlmConfig, Provider};
 
 // Example: Configure for a local Ollama model
-let ollama_config = LlmConfig::new(Provider::Ollama, "qwen3:4b".to_string());
+let ollama_config = LlmConfig::new(Provider::Ollama)
+    .with_base_url("http://localhost:11434".to_string()); // Optional: Defaults if not set
 
 // Example: Configure for OpenAI via OpenRouter (requires API key)
 let openrouter_api_key = std::env::var("OPENROUTER_API_KEY")
     .expect("OPENROUTER_API_KEY must be set");
 
-let openrouter_config = LlmConfig::new(
-        Provider::OpenAI, // Use OpenAI provider type for compatible APIs
-        "mistralai/mistral-7b-instruct-v0.1".to_string() // Specify the OpenRouter model ID
-    )
+let openrouter_config = LlmConfig::new(Provider::OpenAI) // Use OpenAI provider type for compatible APIs
     .with_base_url("https://openrouter.ai/api/v1".to_string())
     .with_api_key(openrouter_api_key);
+
+// Validate the config (optional, but recommended)
+ollama_config.validate().expect("Invalid Ollama config");
+openrouter_config.validate().expect("Invalid OpenRouter config");
 ```
 
 **Environment Variables:**
@@ -69,7 +71,7 @@ Use the `get_provider` function to obtain a trait object (`Arc<dyn LlmProvider>`
 
 ```rust
 # use merco_llmproxy::{LlmConfig, Provider, get_provider};
-# let config = LlmConfig::new(Provider::Ollama, "qwen3:4b".to_string());
+# let config = LlmConfig::new(Provider::Ollama);
 let provider = match get_provider(config) {
     Ok(p) => p,
     Err(e) => {
@@ -89,10 +91,10 @@ Create a `CompletionRequest` and call the `completion` method.
 # use merco_llmproxy::traits::{ChatMessage, CompletionRequest, CompletionKind};
 # #[tokio::main]
 # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-# let config = LlmConfig::new(Provider::Ollama, "qwen3:4b".to_string());
+# let config = LlmConfig::new(Provider::Ollama);
 # let provider = get_provider(config)?;
 let request = CompletionRequest {
-    model: "qwen3:4b".to_string(), // Or the model configured in LlmConfig
+    model: "qwen3:4b".to_string(), // Specify the model HERE
     messages: vec![
         ChatMessage {
             role: "system".to_string(),
@@ -179,7 +181,7 @@ Instead of sending *all* registered tools every time, use `get_tools_by_names` t
 # use merco_llmproxy::{get_tools_by_names, execute_tool, ChatMessage, CompletionKind, CompletionRequest, LlmConfig, Provider, get_provider, Tool};
 # #[tokio::main]
 # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-#     let config = LlmConfig::new(Provider::Ollama, "dummy".to_string());
+#     let config = LlmConfig::new(Provider::Ollama);
 #     let provider = get_provider(config)?;
 #     // Assume add_numbers and get_weather were defined with #[merco_tool]
 
@@ -297,14 +299,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 3. Configure Provider (e.g., OpenRouter - requires env var)
     let api_key = std::env::var("OPENROUTER_API_KEY")?;
-    let config = LlmConfig::new(Provider::OpenAI, "mistralai/mistral-7b-instruct-v0.1".to_string())
+    let config = LlmConfig::new(Provider::OpenAI)
         .with_base_url("https://openrouter.ai/api/v1".to_string())
         .with_api_key(api_key);
     let provider = get_provider(config)?;
 
     // 4. Create Request with Tools
     let request = CompletionRequest {
-        model: "mistralai/mistral-7b-instruct-v0.1".to_string(),
+        model: "mistralai/mistral-7b-instruct-v0.1".to_string(), // Specify model here
         messages: vec![
             ChatMessage {
                 role: "user".to_string(),

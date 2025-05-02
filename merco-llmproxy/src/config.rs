@@ -18,8 +18,6 @@ pub enum Provider {
 pub struct LlmConfig {
     /// The specific provider to use.
     pub provider: Provider,
-    /// The model identifier string (e.g., "gpt-4", "qwen3:4b").
-    pub model: String,
     /// The API key required by the provider (if any).
     pub api_key: Option<String>,
     /// The base URL for the provider's API endpoint.
@@ -40,10 +38,9 @@ pub enum ConfigError {
 
 impl LlmConfig {
     /// Creates a new basic configuration.
-    pub fn new(provider: Provider, model: String) -> Self {
+    pub fn new(provider: Provider) -> Self {
         LlmConfig {
             provider,
-            model,
             api_key: None,
             base_url: None,
         }
