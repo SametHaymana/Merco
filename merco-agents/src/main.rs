@@ -8,8 +8,6 @@ use merco_agents::task::task::Task;
 
 #[tokio::main]
 async fn main() {
-    //let key = "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";
-
     let llm_config = LLMConfig::new(
         "ollama".to_string(),
         "qwen3:4b".to_string(),
