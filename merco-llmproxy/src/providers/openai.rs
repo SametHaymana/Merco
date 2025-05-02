@@ -237,6 +237,7 @@ impl OpenAIProvider {
             .into_iter()
             .map(|tc| ToolCallRequest {
                 id: tc.id,
+                tool_type: "function".to_string(),
                 function: ToolCallFunction {
                     name: tc.function.name,
                     arguments: tc.function.arguments,

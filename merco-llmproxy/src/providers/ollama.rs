@@ -222,13 +222,14 @@ impl OllamaProvider {
         ollama_calls.into_iter().map(|call| {
             ToolCallRequest {
                 id: call.id,
+                tool_type: "function".to_string(),
                 function: ToolCallFunction {
                     name: call.function.name,
                     arguments: match call.function.arguments {
                         JsonValue::String(s) => s,
                         other => serde_json::to_string(&other).unwrap_or_default(),
                     }
-                }
+                },
             }
         }).collect()
     }
