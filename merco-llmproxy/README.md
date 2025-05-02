@@ -136,61 +136,100 @@ match provider.completion(request).await {
 # }
 ```
 
-### 4. Tool Calling with Auto-Generated Tools
+### 4. Defining and Using Tools with `#[merco_tool]`
 
-The simplest way to create tools is by using the `merco_tool` attribute macro, which automatically registers regular Rust functions as LLM tools:
+The `merco_tool` attribute macro provides a convenient way to make your standard Rust functions callable by LLMs. When you annotate a function, it's automatically registered in a global tool registry.
+
+**Step 1: Define Your Tools**
 
 ```rust
-use merco_llmproxy::{
-    merco_tool, get_all_tools, execute_tool,
-    ChatMessage, CompletionKind, CompletionRequest, LlmConfig, Provider, get_provider,
-};
+use merco_llmproxy::merco_tool;
 
-// Define functions with the #[merco_tool] attribute
-#[merco_tool(description = "Adds two numbers together")]
+/// Calculates the sum of two integers.
+#[merco_tool(description = "Calculates the sum of two integers")]
 fn add_numbers(a: i32, b: i32) -> i32 {
     a + b
 }
 
-#[merco_tool(description = "Concatenates two strings")]
-fn concat_strings(first: String, second: String) -> String {
-    format!("{}{}", first, second)
+/// Provides the weather forecast for a specific city.
+#[merco_tool(description = "Provides the weather forecast for a specific city (e.g., London, Paris, Tokyo)")]
+fn get_weather(city: String) -> String {
+    match city.to_lowercase().as_str() {
+        "london" => "Cloudy, 15°C".to_string(),
+        "paris" => "Sunny, 22°C".to_string(),
+        _ => format!("Sorry, weather for {} is unavailable.", city),
+    }
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Tools are automatically registered!
-    
-    // Get all tools for providing to the LLM
-    let tools = get_all_tools();
-    
-    // Create a completion request with the tools
+/// Calculates the area of a circle (might not be needed for every request).
+#[merco_tool(description = "Calculates the area of a circle given its radius")]
+fn calculate_circle_area(radius: f64) -> f64 {
+    std::f64::consts::PI * radius * radius
+}
+
+// ... define other tools as needed ...
+```
+
+**Step 2: Select Tools for the Request**
+
+Instead of sending *all* registered tools every time, use `get_tools_by_names` to select only the relevant ones for the current task. This is more efficient and less confusing for the LLM.
+
+```rust
+# // Dummy imports and setup for example to compile
+# use merco_llmproxy::{get_tools_by_names, execute_tool, ChatMessage, CompletionKind, CompletionRequest, LlmConfig, Provider, get_provider, Tool};
+# #[tokio::main]
+# async fn main() -> Result<(), Box<dyn std::error::Error>> {
+#     let config = LlmConfig::new(Provider::Ollama, "dummy".to_string());
+#     let provider = get_provider(config)?;
+#     // Assume add_numbers and get_weather were defined with #[merco_tool]
+
+    // Define which tools are relevant for this specific request
+    let relevant_tool_names = ["add_numbers", "get_weather"];
+    let selected_tools: Vec<Tool> = get_tools_by_names(&relevant_tool_names);
+
+    if selected_tools.len() != relevant_tool_names.len() {
+        println!("Warning: Some requested tools were not found in the registry.");
+    }
+
+    // Create a completion request using ONLY the selected tools
     let request = CompletionRequest {
-        model: "mistralai/mistral-7b-instruct-v0.1".to_string(),
+        model: "some-model".to_string(), // Replace with your actual model
         messages: vec![
             ChatMessage {
                 role: "user".to_string(),
-                content: Some("What is 42 plus 17? Also, concatenate 'Hello' and 'World'.".to_string()),
+                content: Some("What is 15 plus 9, and what is the weather in Paris?".to_string()),
                 tool_calls: None,
                 tool_call_id: None,
             },
         ],
         temperature: Some(0.1),
         max_tokens: Some(300),
-        tools: Some(tools), // Use our registered tools
+        tools: Some(selected_tools), // Use the specifically selected tools
     };
+#    // Dummy response handling
+#    println!("Simulating request with tools: {:?}", request.tools.unwrap().iter().map(|t| &t.name).collect::<Vec<_>>());
+#    let tool_calls = vec![ 
+#       merco_llmproxy::traits::ToolCallRequest { id: "call_1".to_string(), function: merco_llmproxy::traits::ToolCallFunction { name: "add_numbers".to_string(), arguments: "{\"a\": 15, \"b\": 9}".to_string() } },
+#       merco_llmproxy::traits::ToolCallRequest { id: "call_2".to_string(), function: merco_llmproxy::traits::ToolCallFunction { name: "get_weather".to_string(), arguments: "{\"city\": \"Paris\"}".to_string() } },
+#    ];
+#    let response_kind = CompletionKind::ToolCall { tool_calls }; 
+#    // End dummy setup
     
-    // Make the request to the LLM
-    let response = provider.completion(request).await?;
+    // Make the request to the LLM (using the `provider` instance)
+    // let response = provider.completion(request).await?;
     
-    // Handle tool calls
-    match response.kind {
+    // Handle tool calls (same as before)
+    // match response.kind {
+    match response_kind { // Using dummy response_kind for example
         CompletionKind::ToolCall { tool_calls } => {
+            println!("\nTool Calls Requested:");
             for call in tool_calls {
-                // Execute the tool with the LLM-provided arguments
-                let result = execute_tool(&call.function.name, &call.function.arguments)?;
-                println!("Tool '{}' result: {}", call.function.name, result);
-                
+                println!("  Tool: {}, Args: {}", call.function.name, call.function.arguments);
+                // Execute the tool using the global registry function
+                match execute_tool(&call.function.name, &call.function.arguments) {
+                    Ok(result) => println!("  -> Result: {}", result),
+                    Err(e) => println!("  -> Error: {}", e),
+                }
                 // You would typically send this result back to the LLM in a follow-up message
             }
         }
@@ -203,15 +242,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-The `merco_tool` macro:
-1. Takes your regular Rust functions and makes them callable by LLMs
-2. Automatically determines the JSON parameter schema based on function signatures
-3. Handles serialization/deserialization of arguments and return values
-4. Registers the tools in a global registry
+**How `#[merco_tool]` Works:**
 
-Supported parameter types: integers (`i8`, `i16`, `i32`, `i64`), floats (`f32`, `f64`), strings (`String`), and booleans (`bool`).
+1.  Takes your regular Rust functions.
+2.  Generates necessary structs for argument parsing (`serde::Deserialize`).
+3.  Automatically determines the JSON parameter schema based on function signatures.
+4.  Handles serialization/deserialization of arguments and return values to/from JSON strings.
+5.  Uses the `ctor` crate to register the tool's definition (`Tool`) and its execution logic (`ToolExecutor`) in a global registry when your program starts.
 
-### 5. Manual Tool Setup (Legacy Approach)
+**Key Utilities:**
+
+*   `#[merco_tool]`: The attribute macro to apply to your functions.
+*   `get_tools_by_names(&[&str]) -> Vec<Tool>`: Retrieves specific tool definitions from the registry by name.
+*   `get_all_tools() -> Vec<Tool>`: Retrieves all registered tool definitions.
+*   `execute_tool(&str, &str) -> Result<String, String>`: Executes a registered tool by name using its JSON argument string.
+
+Supported parameter types: integers (`i8`, `i16`, `i32`, `i64`, etc.), floats (`f32`, `f64`), strings (`String`, `&str`), booleans (`bool`), and basic `Vec<T>` of these types.
+
+### 5. Manual Tool Setup (Legacy / Advanced)
 
 For more complex scenarios, you can still manually define tools:
 
