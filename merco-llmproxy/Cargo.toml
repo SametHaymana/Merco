@@ -1,17 +1,25 @@
 [package]
 name = "merco-llmproxy"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+description = "A unified interface for various LLM providers"
+
+[features]
+default = ["macros"]
+macros = ["merco-macros"]
 
 [dependencies]
 async-trait = "0.1"
-futures = "0.3" # For stream handling
-futures-util = "0.3" # For stream utilities
-thiserror = "1.0" # For better error types
-reqwest = { version = "0.12", features = ["json", "stream"] } # HTTP Client
-serde = { version = "1.0", features = ["derive"] } # Serialization/Deserialization
-serde_json = "1.0" # JSON specific serde implementation
-tokio = { version = "1", features = ["full"] } # Async runtime
-bytes = "1" # For handling byte streams
-# Add HTTP client like reqwest or hyper later
-# Add JSON handling like serde later
+bytes = "1.5"
+futures = "0.3"
+reqwest = { version = "0.11", features = ["json", "stream"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+tokio = { version = "1.32", features = ["full"] }
+lazy_static = "1.4"
+merco-macros = { path = "macros", optional = true }
+ctor = "0.2"
+
+[workspace]
+members = ["macros"]

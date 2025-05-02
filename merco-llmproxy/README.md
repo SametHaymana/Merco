@@ -8,6 +8,7 @@ This crate aims to simplify interaction with different LLMs by offering:
 *   A unified asynchronous trait (`LlmProvider`) for chat completions.
 *   Support for multiple providers (currently OpenAI-compatible APIs and Ollama).
 *   Basic support for non-streaming tool calls (function calling).
+*   A convenient macro to register Rust functions as LLM tools.
 
 ## Current Status
 
@@ -135,17 +136,90 @@ match provider.completion(request).await {
 # }
 ```
 
-### 4. Tool Calling (Non-streaming)
+### 4. Tool Calling with Auto-Generated Tools
 
-Define tools, include them in the `CompletionRequest`, and handle the `CompletionKind::ToolCall` variant in the response.
+The simplest way to create tools is by using the `merco_tool` attribute macro, which automatically registers regular Rust functions as LLM tools:
+
+```rust
+use merco_llmproxy::{
+    merco_tool, get_all_tools, execute_tool,
+    ChatMessage, CompletionKind, CompletionRequest, LlmConfig, Provider, get_provider,
+};
+
+// Define functions with the #[merco_tool] attribute
+#[merco_tool(description = "Adds two numbers together")]
+fn add_numbers(a: i32, b: i32) -> i32 {
+    a + b
+}
+
+#[merco_tool(description = "Concatenates two strings")]
+fn concat_strings(first: String, second: String) -> String {
+    format!("{}{}", first, second)
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Tools are automatically registered!
+    
+    // Get all tools for providing to the LLM
+    let tools = get_all_tools();
+    
+    // Create a completion request with the tools
+    let request = CompletionRequest {
+        model: "mistralai/mistral-7b-instruct-v0.1".to_string(),
+        messages: vec![
+            ChatMessage {
+                role: "user".to_string(),
+                content: Some("What is 42 plus 17? Also, concatenate 'Hello' and 'World'.".to_string()),
+                tool_calls: None,
+                tool_call_id: None,
+            },
+        ],
+        temperature: Some(0.1),
+        max_tokens: Some(300),
+        tools: Some(tools), // Use our registered tools
+    };
+    
+    // Make the request to the LLM
+    let response = provider.completion(request).await?;
+    
+    // Handle tool calls
+    match response.kind {
+        CompletionKind::ToolCall { tool_calls } => {
+            for call in tool_calls {
+                // Execute the tool with the LLM-provided arguments
+                let result = execute_tool(&call.function.name, &call.function.arguments)?;
+                println!("Tool '{}' result: {}", call.function.name, result);
+                
+                // You would typically send this result back to the LLM in a follow-up message
+            }
+        }
+        CompletionKind::Message { content } => {
+            println!("Message from LLM: {}", content);
+        }
+    }
+    
+    Ok(())
+}
+```
+
+The `merco_tool` macro:
+1. Takes your regular Rust functions and makes them callable by LLMs
+2. Automatically determines the JSON parameter schema based on function signatures
+3. Handles serialization/deserialization of arguments and return values
+4. Registers the tools in a global registry
+
+Supported parameter types: integers (`i8`, `i16`, `i32`, `i64`), floats (`f32`, `f64`), strings (`String`), and booleans (`bool`).
+
+### 5. Manual Tool Setup (Legacy Approach)
+
+For more complex scenarios, you can still manually define tools:
 
 ```rust
 use merco_llmproxy::{
     LlmConfig, Provider, get_provider,
-    traits::{*
-        ChatMessage, CompletionKind, CompletionRequest, JsonSchema, Tool,
-        ToolCallFunction, ToolCallRequest, TokenUsage,
-    }
+    traits::{ChatMessage, CompletionKind, CompletionRequest, JsonSchema, Tool,
+        ToolCallFunction, ToolCallRequest, TokenUsage},
 };
 use serde::Deserialize;
 use serde_json::json;
@@ -245,8 +319,16 @@ export OPENROUTER_API_KEY="your-key-here"
 cargo run
 ```
 
+The `examples/tool_example.rs` demonstrates the usage of the `merco_tool` macro:
+
+```bash
+cargo run --example tool_example
+```
+
 ## Contributing
 
 Contributions are welcome! Please feel free to open issues or pull requests.
 
 ## License
+
+*(Choose a license, e.g., MIT or Apache-2.0)*

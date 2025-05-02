@@ -6,6 +6,7 @@
 pub mod config;
 pub mod providers;
 pub mod traits;
+pub mod tools;
 
 pub use config::{ConfigError, LlmConfig, Provider};
 pub use providers::{OllamaProvider, OpenAIProvider};
@@ -14,6 +15,13 @@ pub use traits::{
     CompletionStreamChunk, JsonSchema, LlmProvider, ProviderError, StreamContentDelta, Tool,
     ToolCallFunction, ToolCallRequest, ToolCallStreamDelta, TokenUsage,
 };
+
+// Re-export tool utilities 
+pub use tools::{execute_tool, get_all_tools, register_tool, ToolExecutor, ToolRegistry};
+
+// Conditionally re-export the macro if the feature is enabled
+#[cfg(feature = "macros")]
+pub use tools::merco_tool;
 
 // Optional: A factory function to create a provider instance based on config
 use std::sync::Arc;
