@@ -1,3 +1,8 @@
+#![warn(missing_docs)] // Enforce documentation coverage
+//! A Rust library providing a unified interface for various Large Language Model (LLM) providers.
+//! Inspired by LiteLLM, this crate aims to simplify interaction with different LLMs
+//! through a common configuration and trait implementation.
+
 pub mod config;
 pub mod providers;
 pub mod traits;
@@ -5,13 +10,37 @@ pub mod traits;
 pub use config::{ConfigError, LlmConfig, Provider};
 pub use providers::{OllamaProvider, OpenAIProvider};
 pub use traits::{
-    ChatMessage, CompletionRequest, CompletionResponse, CompletionStream, CompletionStreamChunk,
-    LlmProvider, ProviderError, TokenUsage,
+    ChatMessage, CompletionKind, CompletionRequest, CompletionResponse, CompletionStream,
+    CompletionStreamChunk, JsonSchema, LlmProvider, ProviderError, StreamContentDelta, Tool,
+    ToolCallFunction, ToolCallRequest, ToolCallStreamDelta, TokenUsage,
 };
 
 // Optional: A factory function to create a provider instance based on config
 use std::sync::Arc;
 
+/// Creates a provider instance based on the provided configuration.
+///
+/// This function validates the configuration and returns a dynamic dispatch trait object (`Arc<dyn LlmProvider>`) 
+/// allowing interaction with the selected provider through the common `LlmProvider` trait.
+///
+/// # Arguments
+///
+/// * `config` - The `LlmConfig` specifying the provider, model, credentials, etc.
+///
+/// # Errors
+///
+/// Returns `ProviderError::ConfigError` if the configuration is invalid for the selected provider.
+/// Returns `ProviderError::Unsupported` if the selected provider is not yet implemented.
+///
+/// # Examples
+///
+/// ```no_run
+/// use merco_llmproxy::{LlmConfig, Provider, get_provider};
+///
+/// let config = LlmConfig::new(Provider::Ollama, "qwen3:4b".to_string());
+/// let provider = get_provider(config).expect("Failed to get provider");
+/// // Now use the provider methods...
+/// ```
 pub fn get_provider(config: LlmConfig) -> Result<Arc<dyn LlmProvider>, ProviderError> {
     config.validate().map_err(|e| ProviderError::ConfigError(e.to_string()))?;
 
@@ -20,6 +49,5 @@ pub fn get_provider(config: LlmConfig) -> Result<Arc<dyn LlmProvider>, ProviderE
         Provider::Ollama => Ok(Arc::new(OllamaProvider::new(config))),
         Provider::Anthropic => Err(ProviderError::Unsupported("Anthropic provider not yet implemented".to_string())),
         Provider::Custom => Err(ProviderError::Unsupported("Custom provider logic not yet implemented".to_string())),
-        // Handle other providers
     }
 }

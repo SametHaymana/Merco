@@ -1,3 +1,10 @@
+//!
+//! OpenAI Provider Implementation
+//! 
+//! This module provides the `OpenAIProvider` struct and its implementation 
+//! of the `LlmProvider` trait for interacting with OpenAI-compatible APIs
+//! (including OpenAI itself and proxies like OpenRouter).
+
 use crate::config::{LlmConfig, Provider};
 use crate::traits::{
     ChatMessage, CompletionKind, CompletionRequest, CompletionResponse, CompletionStream,
@@ -6,27 +13,27 @@ use crate::traits::{
 };
 use async_trait::async_trait;
 use bytes::Bytes;
-use futures::stream::{Stream, StreamExt, TryStreamExt};
+use futures::stream::TryStreamExt; // Keep TryStreamExt for stream processing
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::{self, json, Value as JsonValue};
-use std::collections::HashMap; // Needed for assembling stream tool calls
-use std::sync::{Arc, Mutex}; // Added Arc, Mutex
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use serde::de::Error as DeError;
-use std::pin::Pin;
 
+/// Base URL for the official OpenAI API.
 const OPENAI_BASE_URL: &str = "https://api.openai.com/v1";
+/// Default request timeout in seconds.
 const DEFAULT_TIMEOUT_SECS: u64 = 120;
 
 // --- OpenAI Specific API Structures ---
 
-// Map our generic Tool struct to OpenAI's format
 #[derive(Serialize, Debug)]
 struct OpenAITool {
     #[serde(rename = "type")]
-    tool_type: String, // Always "function" for now
+    tool_type: String, // Always "function"
     function: OpenAIFunctionDef,
 }
 
@@ -34,7 +41,7 @@ struct OpenAITool {
 struct OpenAIFunctionDef {
     name: String,
     description: String,
-    parameters: JsonSchema, // Re-use our JsonSchema struct directly
+    parameters: JsonSchema,
 }
 
 #[derive(Serialize, Debug)]
@@ -49,37 +56,38 @@ struct OpenAIChatRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     tools: Option<Vec<OpenAITool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    tool_choice: Option<JsonValue>, // Can be "auto", "none", or specific tool spec
+    tool_choice: Option<JsonValue>,
 }
 
 #[derive(Deserialize, Debug)]
+#[allow(dead_code)] // Allow unused fields from API response
 struct OpenAIChatResponse {
-    model: String,
+    // model: String, // Often unused
     choices: Vec<OpenAIChoice>,
     usage: Option<OpenAIUsage>,
 }
 
 #[derive(Deserialize, Debug)]
+#[allow(dead_code)] // Allow unused fields from API response
 struct OpenAIChoice {
-    index: u32,
+    // index: u32, // Often unused
     message: OpenAIMessage,
     finish_reason: Option<String>,
 }
 
-// OpenAI's message can contain text content OR tool calls
 #[derive(Deserialize, Debug, Clone)]
+#[allow(dead_code)] // Allow unused fields from API response
 struct OpenAIMessage {
-    role: String,
-    content: Option<String>, // Can be null when tool_calls are present
+    // role: String, // Often unused
+    content: Option<String>,
     tool_calls: Option<Vec<OpenAIToolCall>>,
 }
 
-// Represents a tool call requested by OpenAI
 #[derive(Deserialize, Debug, Clone)]
+#[allow(dead_code)] // Allow unused fields from API response
 struct OpenAIToolCall {
     id: String,
-    #[serde(rename = "type")]
-    tool_type: String, // Should be "function"
+    // tool_type: String, // Often unused (assumed "function")
     function: OpenAIFunctionCall,
 }
 
@@ -99,45 +107,63 @@ struct OpenAIUsage {
 // --- Streaming Structures ---
 
 #[derive(Deserialize, Debug)]
+#[allow(dead_code)] // Allow unused fields from API response
 struct OpenAIChatStreamResponse {
-    model: String,
+    // model: String, // Often unused
     choices: Vec<OpenAIStreamChoice>,
-    usage: Option<OpenAIUsage>, // Only in final chunk from some models/APIs
+    usage: Option<OpenAIUsage>,
 }
 
 #[derive(Deserialize, Debug)]
+#[allow(dead_code)] // Allow unused fields from API response
 struct OpenAIStreamChoice {
-    index: u32,
+    // index: u32, // Often unused
     delta: OpenAIStreamDelta,
     finish_reason: Option<String>,
 }
 
-// Delta can contain text OR tool call parts
 #[derive(Deserialize, Debug)]
+#[allow(dead_code)] // Allow unused fields from API response
 struct OpenAIStreamDelta {
-    role: Option<String>, // Usually only present in the first chunk
-    content: Option<String>, // Text delta
-    tool_calls: Option<Vec<OpenAIStreamToolCallDelta>>, // Tool call delta
+    // role: Option<String>, // Often unused
+    content: Option<String>,
+    tool_calls: Option<Vec<OpenAIStreamToolCallDelta>>,
 }
 
-// Represents an incremental part of a tool call in the stream
 #[derive(Deserialize, Debug)]
+#[allow(dead_code)] // Allow unused fields from API response
 struct OpenAIStreamToolCallDelta {
-    index: usize, // Index of the tool call this delta is for
-    id: Option<String>, // ID usually appears once per tool call
-    #[serde(rename = "type")]
-    tool_type: Option<String>, // Usually "function"
+    index: usize,
+    id: Option<String>,
+    // tool_type: Option<String>, // Often unused
     function: Option<OpenAIStreamFunctionDelta>,
 }
 
 #[derive(Deserialize, Debug)]
 struct OpenAIStreamFunctionDelta {
-    name: Option<String>, // Name usually appears once per tool call
-    arguments: Option<String>, // Argument JSON string chunks
+    name: Option<String>,
+    arguments: Option<String>,
+}
+
+// For parsing OpenAI's specific error structure
+#[derive(Deserialize, Debug)]
+struct OpenAIErrorResponse {
+    error: OpenAIErrorDetail,
+}
+#[derive(Deserialize, Debug)]
+struct OpenAIErrorDetail {
+    message: String,
+    // code: Option<String>,
+    // param: Option<String>,
+    // error_type: Option<String>, // Renamed from type
 }
 
 // --- Provider Implementation ---
 
+/// Provides interaction with OpenAI-compatible LLM APIs.
+///
+/// Supports standard chat completion and non-streaming tool calls.
+/// Streaming tool calls are currently disabled due to parsing complexities.
 #[derive(Debug, Clone)]
 pub struct OpenAIProvider {
     config: LlmConfig,
@@ -147,6 +173,8 @@ pub struct OpenAIProvider {
 }
 
 impl OpenAIProvider {
+    /// Creates a new OpenAI provider instance from the given configuration.
+    /// Panics if the configuration is missing the required API key or if the HTTP client fails to build.
     pub fn new(config: LlmConfig) -> Self {
         let api_key = config
             .api_key
@@ -166,6 +194,7 @@ impl OpenAIProvider {
         Self { config, client, api_key, base_url }
     }
 
+    /// Builds the necessary HTTP headers for OpenAI API calls.
     fn build_headers(&self) -> HeaderMap {
         let mut headers = HeaderMap::new();
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
@@ -174,18 +203,20 @@ impl OpenAIProvider {
             HeaderValue::from_str(&format!("Bearer {}", self.api_key))
                 .expect("Failed to create auth header"),
         );
-        // Add headers required by specific proxies like OpenRouter if necessary
-        // headers.insert("HTTP-Referer", HeaderValue::from_static("YOUR_SITE_URL"));
-        // headers.insert("X-Title", HeaderValue::from_static("YOUR_APP_NAME"));
+        // Add OpenRouter specific headers if using OpenRouter base URL
+        if self.base_url.contains("openrouter.ai") {
+             // headers.insert("HTTP-Referer", HeaderValue::from_static("YOUR_SITE_URL")); // Optional
+             // headers.insert("X-Title", HeaderValue::from_static("YOUR_APP_NAME")); // Optional
+        }
         headers
     }
 
-    // Helper to map generic Tools to OpenAI Tools
+    /// Maps the generic Tool structure to the OpenAI-specific format.
     fn map_tools_to_openai(tools: Option<&Vec<Tool>>) -> Option<Vec<OpenAITool>> {
         tools.map(|ts| {
             ts.iter()
                 .map(|tool| OpenAITool {
-                    tool_type: "function".to_string(),
+                    tool_type: "function".to_string(), // Currently only support functions
                     function: OpenAIFunctionDef {
                         name: tool.name.clone(),
                         description: tool.description.clone(),
@@ -195,10 +226,61 @@ impl OpenAIProvider {
                 .collect()
         })
     }
+
+    /// Maps the OpenAI usage structure to the generic TokenUsage structure.
+    fn map_usage(usage: Option<OpenAIUsage>) -> Option<TokenUsage> {
+         usage.map(|u| TokenUsage {
+            prompt_tokens: u.prompt_tokens,
+            completion_tokens: u.completion_tokens,
+            total_tokens: u.total_tokens,
+        })
+    }
+
+    /// Maps OpenAI tool calls to the generic ToolCallRequest structure.
+    fn map_tool_calls(tool_calls: Vec<OpenAIToolCall>) -> Vec<ToolCallRequest> {
+        tool_calls
+            .into_iter()
+            .map(|tc| ToolCallRequest {
+                id: tc.id,
+                function: ToolCallFunction {
+                    name: tc.function.name,
+                    arguments: tc.function.arguments,
+                },
+            })
+            .collect()
+    }
+
+    /// Determines the final CompletionKind based on the message content, tool calls, and finish reason.
+    fn determine_completion_kind(message: OpenAIMessage, finish_reason: Option<&str>) -> CompletionKind {
+        match (message.content, message.tool_calls) {
+            // If tool_calls are present, they take precedence, regardless of content.
+            (_, Some(tool_calls)) => {
+                CompletionKind::ToolCall { tool_calls: Self::map_tool_calls(tool_calls) }
+            }
+            // If no tool_calls but content is present, it's a message.
+            (Some(content), None) => {
+                CompletionKind::Message { content }
+            }
+            // If neither content nor tool_calls are present, determine based on finish reason.
+            (None, None) => {
+                match finish_reason {
+                    Some("tool_calls") => {
+                        // Model intended to call tools but didn't provide them (edge case?).
+                        CompletionKind::ToolCall { tool_calls: vec![] }
+                    }
+                    _ => {
+                        // Finished normally or other reason, but content was empty/null.
+                        CompletionKind::Message { content: "".to_string() }
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[async_trait]
 impl LlmProvider for OpenAIProvider {
+    /// Generates a non-streaming completion, handling potential tool calls.
     async fn completion(&self, request: CompletionRequest) -> Result<CompletionResponse, ProviderError> {
         if self.config.provider != Provider::OpenAI {
             return Err(ProviderError::ConfigError(
@@ -213,24 +295,23 @@ impl LlmProvider for OpenAIProvider {
             max_tokens: request.max_tokens,
             stream: false,
             tools: Self::map_tools_to_openai(request.tools.as_ref()),
-            tool_choice: request.tools.as_ref().map(|_| json!("auto")), // Default to auto if tools are provided
+            // Default to auto tool choice if tools are present, allows user override later
+            tool_choice: request.tools.as_ref().map(|_| json!("auto")), 
         };
 
         let url = format!("{}/chat/completions", self.base_url);
         let headers = self.build_headers();
 
-        let res = self
-            .client
-            .post(&url)
-            .headers(headers)
-            .json(&openai_request)
-            .send()
-            .await?;
+        let res = self.client.post(&url).headers(headers).json(&openai_request).send().await?;
 
         if !res.status().is_success() {
             let status = res.status().as_u16();
             let error_body = res.text().await.unwrap_or_else(|_| "Failed to read error body".to_string());
-            return Err(ProviderError::ApiError { status, message: error_body });
+            // Try to parse OpenAI specific error
+             let message = serde_json::from_str::<OpenAIErrorResponse>(&error_body)
+                 .map(|e| e.error.message)
+                 .unwrap_or(error_body); // Fallback to full body
+            return Err(ProviderError::ApiError { status, message });
         }
 
         let openai_response: OpenAIChatResponse = res.json().await?;
@@ -238,58 +319,33 @@ impl LlmProvider for OpenAIProvider {
         let first_choice = openai_response.choices.into_iter().next()
             .ok_or_else(|| ProviderError::ParseError(serde_json::Error::custom("No choices found in OpenAI response")))?;
 
-        let usage = openai_response.usage.map(|u| TokenUsage {
-            prompt_tokens: u.prompt_tokens,
-            completion_tokens: u.completion_tokens,
-            total_tokens: u.total_tokens,
-        });
+        let usage = Self::map_usage(openai_response.usage);
+        // Extract finish_reason before moving message into the helper
+        let finish_reason = first_choice.finish_reason.clone(); 
 
-        // Check if the response contains tool calls or a message
-        let kind = if let Some(tool_calls) = first_choice.message.tool_calls {
-            // Map OpenAI tool calls to our generic format
-            let generic_tool_calls = tool_calls
-                .into_iter()
-                .map(|tc| ToolCallRequest {
-                    id: tc.id,
-                    function: ToolCallFunction {
-                        name: tc.function.name,
-                        arguments: tc.function.arguments,
-                    },
-                })
-                .collect();
-            CompletionKind::ToolCall { tool_calls: generic_tool_calls }
-        } else if let Some(content) = first_choice.message.content {
-            CompletionKind::Message { content }
-        } else {
-            // Should not happen if finish_reason is not tool_calls
-             if first_choice.finish_reason == Some("tool_calls".to_string()) {
-                 // It's possible to get finish_reason tool_calls but empty message content/tool_calls in rare cases?
-                 // Return empty tool call list for now
-                 CompletionKind::ToolCall { tool_calls: vec![] }
-             } else {
-                 // Or maybe it finished normally but content was empty/null?
-                 CompletionKind::Message { content: "".to_string() }
-             }
-        };
+        // Use the helper function to determine the kind (pass only message)
+        let kind = Self::determine_completion_kind(first_choice.message, finish_reason.as_deref()); 
 
         Ok(CompletionResponse {
             kind,
             usage,
-            finish_reason: first_choice.finish_reason,
+            finish_reason, // Use the extracted finish_reason
         })
     }
 
+    /// Generates a streaming completion.
+    /// NOTE: Tool calls are currently unsupported in streaming mode for this provider.
     async fn completion_stream(
         &self,
         request: CompletionRequest,
     ) -> Result<CompletionStream, ProviderError> {
-        // --- TEMPORARY: Disable streaming tool calls due to parsing issues ---
+        // --- Temporarily disabled due to SSE parsing fragility ---
         if request.tools.is_some() {
             return Err(ProviderError::Unsupported(
                 "Streaming tool calls are not currently supported by the OpenAI provider implementation.".to_string()
             ));
         }
-        // --- END TEMPORARY --- 
+        // --- End Temporary ---
 
         if self.config.provider != Provider::OpenAI {
             return Err(ProviderError::ConfigError(
@@ -303,47 +359,38 @@ impl LlmProvider for OpenAIProvider {
             temperature: request.temperature,
             max_tokens: request.max_tokens,
             stream: true,
-            tools: Self::map_tools_to_openai(request.tools.as_ref()),
-            tool_choice: request.tools.as_ref().map(|_| json!("auto")), // Default to auto
+            tools: None, // Ensure tools are None for stream request
+            tool_choice: None, // Ensure tool_choice is None for stream request
         };
 
         let url = format!("{}/chat/completions", self.base_url);
         let headers = self.build_headers();
 
-        let res = self
-            .client
-            .post(&url)
-            .headers(headers)
-            .json(&openai_request)
-            .send()
-            .await?;
+        let res = self.client.post(&url).headers(headers).json(&openai_request).send().await?;
 
         if !res.status().is_success() {
             let status = res.status().as_u16();
             let error_body = res.text().await.unwrap_or_else(|_| "Failed to read error body".to_string());
-            return Err(ProviderError::ApiError { status, message: error_body });
+             let message = serde_json::from_str::<OpenAIErrorResponse>(&error_body)
+                 .map(|e| e.error.message)
+                 .unwrap_or(error_body); 
+            return Err(ProviderError::ApiError { status, message });
         }
 
         let sse_stream = res.bytes_stream().map_err(ProviderError::RequestError);
 
-        // State wrapped in Arc<Mutex> for shared mutable access
+        // State for aggregating tool calls, wrapped for async stream handling
         let tool_call_aggregator = Arc::new(Mutex::new(HashMap::<usize, ToolCallStreamDelta>::new()));
 
         let chunk_stream = sse_stream.try_filter_map(move |chunk: Bytes| {
-            // Clone the Arc for the async block, this is cheap
             let state_lock = Arc::clone(&tool_call_aggregator);
-
             async move {
                 let lines = chunk.split(|&b| b == b'\n');
                 let mut result_chunk: Option<CompletionStreamChunk> = None;
                 let mut final_usage: Option<OpenAIUsage> = None;
                 let mut final_reason: Option<String> = None;
 
-                // Lock mutex for the duration needed to process this chunk
-                let mut current_tool_calls = state_lock.lock().map_err(|_| {
-                    ProviderError::Unexpected("Mutex poisoned in stream processing".to_string())
-                })?;
-
+                // Process each line in the chunk
                 for line in lines {
                     if line.starts_with(b"data: ") {
                         let data = &line[6..];
@@ -354,13 +401,18 @@ impl LlmProvider for OpenAIProvider {
                         match serde_json::from_slice::<OpenAIChatStreamResponse>(data) {
                             Ok(openai_chunk) => {
                                 if let Some(usage) = openai_chunk.usage {
-                                    final_usage = Some(usage);
+                                    final_usage = Some(usage); // Capture final usage if present
                                 }
 
                                 if let Some(choice) = openai_chunk.choices.into_iter().next() {
                                      if let Some(reason) = choice.finish_reason {
-                                         final_reason = Some(reason);
+                                         final_reason = Some(reason); // Capture final reason
                                      }
+
+                                    // Lock mutex to process delta content
+                                    let mut current_tool_calls = state_lock.lock().map_err(|_| {
+                                        ProviderError::Unexpected("Mutex poisoned in stream processing".to_string())
+                                    })?;
 
                                     if let Some(text_delta) = choice.delta.content {
                                         if !text_delta.is_empty() {
@@ -369,43 +421,34 @@ impl LlmProvider for OpenAIProvider {
                                                 usage: None,
                                                 finish_reason: None,
                                             });
-                                            // Clear the shared state when text is received
-                                            current_tool_calls.clear();
+                                            current_tool_calls.clear(); // Clear tool state if text received
                                         }
                                     } else if let Some(tool_deltas) = choice.delta.tool_calls {
                                         let mut generic_deltas = Vec::new();
                                         for tool_delta in tool_deltas {
-                                            // Access and modify the state behind the mutex lock
                                             let entry = current_tool_calls
                                                 .entry(tool_delta.index)
                                                 .or_insert_with(|| ToolCallStreamDelta {
-                                                    index: tool_delta.index,
-                                                    id: None,
-                                                    function: None,
+                                                    index: tool_delta.index, id: None, function: None,
                                                 });
 
+                                            // Aggregate parts into the entry in the shared state
                                             if let Some(id) = tool_delta.id { entry.id = Some(id); }
                                             if let Some(func_delta) = tool_delta.function {
                                                 let func_entry = entry.function.get_or_insert_with(|| {
-                                                    ToolCallFunctionStreamDelta {
-                                                        name: None,
-                                                        arguments: None,
-                                                    }
+                                                    ToolCallFunctionStreamDelta { name: None, arguments: None }
                                                 });
                                                 if let Some(name) = func_delta.name { func_entry.name = Some(name); }
-                                                if let Some(args_chunk) = func_delta.arguments { 
-                                                     // DEBUG: Print incoming arg chunk
-                                                     eprintln!("--> DEBUG: Received args_chunk: {:?}", args_chunk);
-                                                     let current_args = func_entry.arguments.clone().unwrap_or_default();
-                                                     // DEBUG: Print state *before* appending
-                                                     eprintln!("--> DEBUG: current_args: {:?}", current_args);
-                                                     func_entry.arguments = Some(current_args + &args_chunk);
-                                                     // DEBUG: Print state *after* appending
-                                                     eprintln!("--> DEBUG: func_entry.arguments after: {:?}", func_entry.arguments);
+                                                if let Some(args_chunk) = func_delta.arguments {
+                                                     // DEBUG prints removed
+                                                     let current_args = func_entry.arguments.get_or_insert_with(String::new);
+                                                     current_args.push_str(&args_chunk);
                                                  }
                                             }
-                                            generic_deltas.push(entry.clone());
+                                            // Add a *clone* of the current aggregated state to the output chunk
+                                            generic_deltas.push(entry.clone()); 
                                         }
+                                        // Only create a chunk if we actually processed deltas
                                         if !generic_deltas.is_empty() {
                                             result_chunk = Some(CompletionStreamChunk {
                                                 delta: StreamContentDelta::ToolCallDelta(generic_deltas),
@@ -414,31 +457,28 @@ impl LlmProvider for OpenAIProvider {
                                             });
                                         }
                                     }
+                                    // Mutex guard dropped here implicitly
                                 }
                             }
                             Err(e) => {
-                                eprintln!("Failed to parse OpenAI SSE chunk: {:?}, data: {}", e, String::from_utf8_lossy(data));
-                                return Err(ProviderError::ParseError(e));
+                                eprintln!("Failed to parse OpenAI SSE chunk: {}, data: {}", e, String::from_utf8_lossy(data));
+                                // Decide whether to stop stream on parse error
+                                return Err(ProviderError::ParseError(e)); 
                             }
                         }
                     }
                 }
-                // Mutex guard `current_tool_calls` is dropped here, unlocking the mutex
-
-                // If final info collected, create final chunk (unless we already generated a chunk)
+                
+                // If no data chunk was generated, but we got final usage/reason, create a final chunk
                 if result_chunk.is_none() && (final_reason.is_some() || final_usage.is_some()) {
                      result_chunk = Some(CompletionStreamChunk {
-                         delta: StreamContentDelta::Text("".to_string()),
-                         usage: final_usage.map(|u| TokenUsage {
-                                 prompt_tokens: u.prompt_tokens,
-                                 completion_tokens: u.completion_tokens,
-                                 total_tokens: u.total_tokens,
-                             }),
+                         delta: StreamContentDelta::Text("".to_string()), // Empty delta for final info
+                         usage: Self::map_usage(final_usage),
                          finish_reason: final_reason,
                      });
                  }
 
-                 Ok(result_chunk)
+                 Ok(result_chunk) // Return Option<CompletionStreamChunk>
             }
         });
 

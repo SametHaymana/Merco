@@ -1,3 +1,10 @@
+//!
+//! Ollama Provider Implementation
+//! 
+//! Provides the `OllamaProvider` struct for interacting with local Ollama instances.
+//! Supports non-streaming chat completions and non-streaming tool calls (via JSON mode).
+//! Streaming tool calls are not supported as they require JSON mode, which Ollama disables for streaming.
+
 use crate::config::{LlmConfig, Provider};
 use crate::traits::{
     ChatMessage, CompletionRequest, CompletionResponse, CompletionStream, CompletionStreamChunk,
@@ -14,8 +21,11 @@ use serde_json;
 use std::time::Duration;
 use serde::de::Error as DeError;
 use serde_json::Value as JsonValue;
+use std::collections::HashMap;
 
+/// Default base URL for a local Ollama instance.
 const OLLAMA_DEFAULT_BASE_URL: &str = "http://localhost:11434";
+/// Default request timeout in seconds.
 const DEFAULT_TIMEOUT_SECS: u64 = 120;
 
 // Internal structs mapping to Ollama's API
@@ -93,7 +103,7 @@ struct OllamaJsonResponse {
     eval_count: Option<u32>,
     eval_duration: Option<u64>,
     message: Option<ChatMessage>,
-    tool_calls: Option<Vec<ToolCallRequest>>,
+    tool_calls: Option<Vec<OllamaToolCall>>,
 }
 
 // Standard non-streaming, non-json response
@@ -132,6 +142,9 @@ struct OllamaToolFunction {
 
 // --- Provider Implementation ---
 
+/// Provides interaction with Ollama instances.
+///
+/// Supports non-streaming chat completion and non-streaming tool calls (using JSON mode).
 #[derive(Debug, Clone)]
 pub struct OllamaProvider {
     config: LlmConfig,
@@ -140,6 +153,7 @@ pub struct OllamaProvider {
 }
 
 impl OllamaProvider {
+    /// Creates a new Ollama provider instance.
     pub fn new(config: LlmConfig) -> Self {
         let base_url = config
             .base_url
@@ -156,6 +170,7 @@ impl OllamaProvider {
         Self { config, client, base_url }
     }
 
+    /// Builds standard HTTP headers for Ollama requests.
     fn build_headers(&self) -> HeaderMap {
         let mut headers = HeaderMap::new();
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
@@ -163,7 +178,7 @@ impl OllamaProvider {
         headers
     }
 
-    // Helper to create OllamaOptions from CompletionRequest
+    /// Creates the Ollama options structure from the generic request.
     fn create_ollama_options(request: &CompletionRequest) -> Option<OllamaOptions> {
         let options = OllamaOptions {
             temperature: request.temperature,
@@ -178,25 +193,53 @@ impl OllamaProvider {
         }
     }
 
-    // Helper to format tools for the prompt
+    /// Formats tool definitions into a string suitable for inclusion in a system prompt.
     fn format_tools_for_prompt(tools: &[Tool]) -> String {
-        let mut tool_desc = String::from("You have access to the following tools. Use them if necessary by outputting a JSON object with a single key 'tool_calls' containing a list of calls. Each call object should have 'id' (a unique lowercase string), 'function' containing 'name' and 'arguments' (a JSON object matching the tool's parameters schema).\n\nAvailable Tools:\n");
+        let mut tool_desc = String::from("You have access to the following tools. Use them if necessary by outputting ONLY a JSON object with a single key 'tool_calls' containing a list of calls. Each call object in the list should have 'id' (a unique lowercase string), and 'function' containing 'name' (the tool name) and 'arguments' (a JSON object matching the tool's parameters schema). Do not output any other text, explanation, or markdown formatting around the JSON object.\n\nAvailable Tools:\n");
         for tool in tools {
             tool_desc.push_str(&format!("- Name: {}\n", tool.name));
             tool_desc.push_str(&format!("  Description: {}\n", tool.description));
-            if let Ok(params) = serde_json::to_string_pretty(&tool.parameters) {
-                tool_desc.push_str(&format!("  Parameters Schema: {}\n", params));
+            match serde_json::to_string_pretty(&tool.parameters) {
+                Ok(params) => tool_desc.push_str(&format!("  Parameters Schema: {}\n", params)),
+                Err(_) => tool_desc.push_str("  Parameters Schema: (Failed to format)\n"),
             }
         }
         tool_desc
+    }
+
+    /// Calculates token usage if prompt and completion counts are available.
+    fn calculate_usage(prompt_tokens: Option<u32>, completion_tokens: Option<u32>) -> Option<TokenUsage> {
+        match (prompt_tokens, completion_tokens) {
+            (Some(pt), Some(ct)) => Some(TokenUsage {
+                prompt_tokens: pt,
+                completion_tokens: ct,
+                total_tokens: pt + ct,
+            }),
+            _ => None,
+        }
+    }
+
+    /// Maps Ollama-specific tool calls (parsed from JSON) to the generic ToolCallRequest structure.
+    fn map_ollama_tool_calls(ollama_calls: Vec<OllamaToolCall>) -> Vec<ToolCallRequest> {
+        ollama_calls.into_iter().map(|call| {
+            ToolCallRequest {
+                id: call.id,
+                function: ToolCallFunction {
+                    name: call.function.name,
+                    arguments: match call.function.arguments {
+                        JsonValue::String(s) => s,
+                        other => serde_json::to_string(&other).unwrap_or_default(),
+                    }
+                }
+            }
+        }).collect()
     }
 }
 
 #[async_trait]
 impl LlmProvider for OllamaProvider {
+    /// Generates a non-streaming completion, potentially using JSON mode for tool calls.
     async fn completion(&self, request: CompletionRequest) -> Result<CompletionResponse, ProviderError> {
-        // Removed tool check for non-streaming
-
         if self.config.provider != Provider::Ollama && self.config.provider != Provider::Custom {
              return Err(ProviderError::ConfigError(
                  "Invalid provider configured for OllamaProvider".to_string(),
@@ -250,7 +293,11 @@ impl LlmProvider for OllamaProvider {
         if !res.status().is_success() {
             let status = res.status().as_u16();
             let error_body = res.text().await.unwrap_or_else(|_| "Failed to read error body".to_string());
-            return Err(ProviderError::ApiError { status, message: error_body });
+            let message = serde_json::from_str::<HashMap<String, String>>(&error_body)
+                .ok()
+                .and_then(|json| json.get("error").cloned())
+                .unwrap_or(error_body);
+            return Err(ProviderError::ApiError { status, message });
         }
 
         // Handle response based on whether JSON format was requested
@@ -260,31 +307,14 @@ impl LlmProvider for OllamaProvider {
             // Try to parse the whole thing as our expected structure first
             match serde_json::from_value::<OllamaJsonResponse>(raw_json_response.clone()) {
                 Ok(ollama_response) => {
-                    let usage = match (ollama_response.prompt_eval_count, ollama_response.eval_count) {
-                        (Some(prompt_tokens), Some(completion_tokens)) => Some(TokenUsage {
-                            prompt_tokens,
-                            completion_tokens,
-                            total_tokens: prompt_tokens + completion_tokens,
-                        }),
-                        _ => None,
-                    };
+                    let usage = Self::calculate_usage(ollama_response.prompt_eval_count, ollama_response.eval_count);
 
                     // Check primary tool_calls field first
                     if let Some(tool_calls) = ollama_response.tool_calls {
-                        // Ensure arguments are strings
-                        let validated_calls = tool_calls.into_iter().map(|call| {
-                            ToolCallRequest {
-                                id: call.id,
-                                function: ToolCallFunction {
-                                    name: call.function.name,
-                                    arguments: call.function.arguments,
-                                }
-                            }
-                        }).collect();
                         Ok(CompletionResponse {
-                            kind: CompletionKind::ToolCall { tool_calls: validated_calls },
+                            kind: CompletionKind::ToolCall { tool_calls: Self::map_ollama_tool_calls(tool_calls) },
                             usage,
-                            finish_reason: if ollama_response.done { Some("tool_calls".to_string()) } else { None }, // Assume tool call if field present
+                            finish_reason: if ollama_response.done { Some("tool_calls".to_string()) } else { None },
                         })
                     } 
                     // If no top-level tool_calls, check if the *message content* contains it
@@ -294,21 +324,8 @@ impl LlmProvider for OllamaProvider {
                              match serde_json::from_str::<OllamaToolCallPayload>(content_str) {
                                  Ok(tool_payload) => {
                                      // Ensure arguments are strings
-                                      let validated_calls = tool_payload.tool_calls.into_iter().map(|call| {
-                                         ToolCallRequest {
-                                             id: call.id,
-                                             function: ToolCallFunction {
-                                                 name: call.function.name,
-                                                 // Attempt to stringify arguments if they aren't already
-                                                 arguments: match call.function.arguments {
-                                                     JsonValue::String(s) => s,
-                                                     other => serde_json::to_string(&other).unwrap_or_default(),
-                                                 }
-                                             }
-                                         }
-                                     }).collect();
                                       Ok(CompletionResponse {
-                                         kind: CompletionKind::ToolCall { tool_calls: validated_calls },
+                                         kind: CompletionKind::ToolCall { tool_calls: Self::map_ollama_tool_calls(tool_payload.tool_calls) },
                                          usage,
                                          finish_reason: if ollama_response.done { Some("tool_calls".to_string()) } else { None },
                                      })
@@ -343,20 +360,8 @@ impl LlmProvider for OllamaProvider {
                         Ok(tool_payload) => {
                              // Estimate usage? Difficult without the standard response fields.
                              let usage = None; 
-                              let validated_calls = tool_payload.tool_calls.into_iter().map(|call| {
-                                 ToolCallRequest {
-                                     id: call.id,
-                                     function: ToolCallFunction {
-                                         name: call.function.name,
-                                         arguments: match call.function.arguments {
-                                             JsonValue::String(s) => s,
-                                             other => serde_json::to_string(&other).unwrap_or_default(),
-                                         }
-                                     }
-                                 }
-                             }).collect();
-                             Ok(CompletionResponse {
-                                 kind: CompletionKind::ToolCall { tool_calls: validated_calls },
+                              Ok(CompletionResponse {
+                                 kind: CompletionKind::ToolCall { tool_calls: Self::map_ollama_tool_calls(tool_payload.tool_calls) },
                                  usage,
                                  finish_reason: Some("tool_calls".to_string()), // Assume tool call finish
                              })
@@ -371,14 +376,7 @@ impl LlmProvider for OllamaProvider {
         } else {
             // Standard non-JSON response parsing
             let ollama_response: OllamaStandardResponse = res.json().await?;
-            let usage = match (ollama_response.prompt_eval_count, ollama_response.eval_count) {
-                (Some(prompt_tokens), Some(completion_tokens)) => Some(TokenUsage {
-                    prompt_tokens,
-                    completion_tokens,
-                    total_tokens: prompt_tokens + completion_tokens,
-                }),
-                _ => None,
-            };
+            let usage = Self::calculate_usage(ollama_response.prompt_eval_count, ollama_response.eval_count);
             Ok(CompletionResponse {
                 kind: CompletionKind::Message { content: ollama_response.message.content.unwrap_or_default() },
                 usage,
@@ -387,6 +385,7 @@ impl LlmProvider for OllamaProvider {
         }
     }
 
+    /// Generates a streaming completion (tool calls unsupported).
     async fn completion_stream(
         &self,
         request: CompletionRequest,
@@ -426,7 +425,11 @@ impl LlmProvider for OllamaProvider {
         if !res.status().is_success() {
             let status = res.status().as_u16();
             let error_body = res.text().await.unwrap_or_else(|_| "Failed to read error body".to_string());
-            return Err(ProviderError::ApiError { status, message: error_body });
+            let message = serde_json::from_str::<HashMap<String, String>>(&error_body)
+                .ok()
+                .and_then(|json| json.get("error").cloned())
+                .unwrap_or(error_body);
+            return Err(ProviderError::ApiError { status, message });
         }
 
         // Process the newline-delimited JSON stream
@@ -445,22 +448,8 @@ impl LlmProvider for OllamaProvider {
                 match serde_json::from_slice::<OllamaChatStreamResponse>(line) {
                     Ok(ollama_chunk) => {
                         let delta_content = ollama_chunk.message.content;
-                        let mut usage = None;
-                        let mut finish_reason = None;
-
-                        // Token usage and finish reason only arrive in the final chunk
-                        if ollama_chunk.done {
-                             // Use the specific reason from Ollama if available, otherwise default or None
-                             finish_reason = ollama_chunk.done_reason; //.or_else(|| Some("stop".to_string()));
-                             usage = match (ollama_chunk.prompt_eval_count, ollama_chunk.eval_count) {
-                                 (Some(prompt_tokens), Some(completion_tokens)) => Some(TokenUsage {
-                                     prompt_tokens,
-                                     completion_tokens,
-                                     total_tokens: prompt_tokens + completion_tokens,
-                                 }),
-                                 _ => None,
-                             };
-                        }
+                        let usage = Self::calculate_usage(ollama_chunk.prompt_eval_count, ollama_chunk.eval_count);
+                        let finish_reason = ollama_chunk.done_reason;
 
                          // Send a chunk if there's content or if it's the final chunk
                          if !delta_content.is_empty() || ollama_chunk.done {
