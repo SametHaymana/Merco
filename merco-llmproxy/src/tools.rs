@@ -52,6 +52,8 @@ lazy_static! {
 pub fn register_tool(tool: Tool, executor: ToolExecutor) {
     if let Ok(mut registry) = GLOBAL_REGISTRY.lock() {
         registry.register(tool, executor);
+    } else {
+        eprintln!("[Tool Registry] Failed to lock registry for registering tool.");
     }
 }
 
@@ -67,6 +69,31 @@ pub fn get_all_tools() -> Vec<Tool> {
         .lock()
         .map(|registry| registry.get_tools())
         .unwrap_or_default()
+}
+
+/// Get a specific subset of registered tools by their names.
+///
+/// # Arguments
+///
+/// * `names` - A slice of string slices representing the names of the tools to retrieve.
+///
+/// # Returns
+///
+/// A `Vec<Tool>` containing the definitions of the found tools. Tools not found in the
+/// registry are silently ignored.
+pub fn get_tools_by_names(names: &[&str]) -> Vec<Tool> {
+    let registry = match GLOBAL_REGISTRY.lock() {
+        Ok(reg) => reg,
+        Err(e) => {
+            eprintln!("[Tool Registry] Failed to lock registry for getting tools by name: {}", e);
+            return Vec::new(); // Return empty list on lock failure
+        }
+    };
+
+    names
+        .iter()
+        .filter_map(|name| registry.tools.get(*name).map(|(tool, _)| tool.clone()))
+        .collect()
 }
 
 /// Execute a tool by name with JSON arguments

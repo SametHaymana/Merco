@@ -17,7 +17,7 @@ pub use traits::{
 };
 
 // Re-export tool utilities 
-pub use tools::{execute_tool, get_all_tools, register_tool, ToolExecutor, ToolRegistry};
+pub use tools::{execute_tool, get_all_tools, get_tools_by_names, register_tool, ToolExecutor, ToolRegistry};
 
 // Conditionally re-export the macro if the feature is enabled
 #[cfg(feature = "macros")]
