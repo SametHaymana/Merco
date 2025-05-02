@@ -7,9 +7,7 @@
 
 use crate::config::{LlmConfig, Provider};
 use crate::traits::{
-    ChatMessage, CompletionRequest, CompletionResponse, CompletionStream, CompletionStreamChunk,
-    LlmProvider, ProviderError, TokenUsage, CompletionKind, StreamContentDelta,
-    Tool, ToolCallFunction, ToolCallRequest,
+    ChatMessage, ChatMessageRole, CompletionKind, CompletionRequest, CompletionResponse, CompletionStream, CompletionStreamChunk, LlmProvider, ProviderError, StreamContentDelta, TokenUsage, Tool, ToolCallFunction, ToolCallRequest
 };
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -256,13 +254,13 @@ impl LlmProvider for OllamaProvider {
                 let tool_prompt = Self::format_tools_for_prompt(tools);
 
                 // Find or create a system prompt
-                if let Some(system_message) = messages.iter_mut().find(|m| m.role == "system") {
+                if let Some(system_message) = messages.iter_mut().find(|m| m.role == ChatMessageRole::System) {
                     let existing_content = system_message.content.take().unwrap_or_default();
                     system_message.content = Some(format!("{}\n\n{}", existing_content, tool_prompt));
                 } else {
                     // Prepend a new system prompt
                     messages.insert(0, ChatMessage {
-                        role: "system".to_string(),
+                        role: ChatMessageRole::System,
                         content: Some(tool_prompt),
                         tool_calls: None,
                         tool_call_id: None,

@@ -51,11 +51,34 @@ pub struct CompletionRequest {
     // Consider adding tool_choice option later.
 }
 
+impl CompletionRequest {
+    pub fn new(messages: Vec<ChatMessage>, model: String, temperature: Option<f32>, max_tokens: Option<u32>, tools: Option<Vec<Tool>>) -> Self {
+        Self { messages, model, temperature, max_tokens, tools }
+    }
+}
+
+/// Represents the role of a message sender in a chat conversation.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ChatMessageRole {
+    /// A system message that provides instructions or context for the model.
+    #[serde(rename = "system")]
+    System,
+    /// A user message that contains the actual input or query.
+    #[serde(rename = "user")]
+    User,
+    /// An assistant message that contains the model's response.
+    #[serde(rename = "assistant")]
+    Assistant,
+    /// A tool message that contains the result of a tool call.
+    #[serde(rename = "tool")]
+    Tool,
+}
+
 /// Represents a single message in a chat conversation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
     /// The role of the message sender (e.g., "system", "user", "assistant", "tool").
-    pub role: String,
+    pub role: ChatMessageRole,
     /// The text content of the message. Can be None for assistant messages requesting tool calls
     /// or for tool messages providing results.
     pub content: Option<String>,
@@ -67,6 +90,12 @@ pub struct ChatMessage {
     /// Present only for `tool` role messages.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_call_id: Option<String>,
+}
+
+impl ChatMessage {
+    pub fn new(role: ChatMessageRole, content: Option<String>, tool_calls: Option<Vec<ToolCallRequest>>, tool_call_id: Option<String>) -> Self {
+        Self { role, content, tool_calls, tool_call_id }
+    }
 }
 
 /// Represents a tool call requested by the LLM assistant.

@@ -1,12 +1,11 @@
-use rllm::chat::StructuredOutputFormat;
 
 pub struct Task {
     pub description: String,
-    pub expected_output: Option<StructuredOutputFormat>,
+    pub expected_output: Option<String>,
 }
 
 impl Task {
-    pub fn new(description: String, expected_output: Option<StructuredOutputFormat>) -> Self {
+    pub fn new(description: String, expected_output: Option<String>) -> Self {
         Self { description, expected_output }
     }
 }

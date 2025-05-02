@@ -203,11 +203,6 @@ impl OpenAIProvider {
             HeaderValue::from_str(&format!("Bearer {}", self.api_key))
                 .expect("Failed to create auth header"),
         );
-        // Add OpenRouter specific headers if using OpenRouter base URL
-        if self.base_url.contains("openrouter.ai") {
-             // headers.insert("HTTP-Referer", HeaderValue::from_static("YOUR_SITE_URL")); // Optional
-             // headers.insert("X-Title", HeaderValue::from_static("YOUR_APP_NAME")); // Optional
-        }
         headers
     }
 
