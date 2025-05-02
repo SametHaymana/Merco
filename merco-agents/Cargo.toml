@@ -1,0 +1,12 @@
+[package]
+name = "merco-agents"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rllm = "1.1.7"
+serde = { version = "1.0.215", features = ["derive"] }
+serde_json = "1.0.115"
+tokio = { version = "1.41.1", features = ["full"] }
+async-trait = "0.1.79"
+futures = "0.3.31"

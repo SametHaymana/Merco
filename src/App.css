@@ -6,23 +6,23 @@
   filter: drop-shadow(0 0 2em #61dafb);
 }
 :root {
-  font-family: 'Orbitron', sans-serif; /* Suggesting a futuristic font - requires import or webfont link */
-  /* Or stick with system fonts: Inter, Avenir, Helvetica, Arial, sans-serif */
+  font-family: var(--primary-font, 'Inter', sans-serif); /* Provide fallbacks */
   font-size: 16px;
   line-height: 1.6;
   font-weight: 400;
 
-  /* Futuristic AI Color Scheme */
-  --dark-bg: #1a1a1a; /* Very dark grey / near black */
-  --primary-gold: #daa520; /* Gold accent */
-  --secondary-cyan: #00ffff; /* Electric cyan highlight */
-  --light-text: #e0e0e0; /* Light grey text for contrast */
-  --dark-text: #333333; /* Dark text for light backgrounds (if any) */
-  --hover-gold: #f0c43e; /* Lighter gold for hover */
-  --border-color: #444444; /* Darker border */
+  /* Futuristic AI Color Scheme - These are now defaults, updated by JS */
+  --dark-bg: #1a1a1a;
+  --primary-gold: #daa520;
+  --secondary-cyan: #00ffff;
+  --light-text: #e0e0e0;
+  --dark-text: #333333;
+  --hover-gold: #f0c43e;
+  --border-color: #444444;
+  --primary-font: 'Orbitron', sans-serif; /* Initial definition */
 
-  color: var(--light-text); /* Default text color on dark bg */
-  background-color: var(--dark-bg); /* Dark background */
+  color: var(--light-text);
+  background-color: var(--dark-bg);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -32,13 +32,13 @@
 }
 
 /* Optional: Import Orbitron font if using */
-/* @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap'); */
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Inter:wght@400;500&family=Roboto:wght@400;500&display=swap');
 
 body {
   margin: 0;
-  font-family: inherit;
-  background-color: var(--dark-bg); /* Ensure body bg is dark */
-  color: var(--light-text); /* Ensure body text is light */
+  font-family: inherit; /* Inherit from :root */
+  background-color: var(--dark-bg);
+  color: var(--light-text);
 }
 
 .container {
@@ -63,8 +63,55 @@ a:hover {
 }
 
 h1, h2, h3, h4, h5, h6 {
-  color: var(--primary-gold); /* Gold headings */
+  color: var(--primary-gold);
   margin-top: 0;
 }
 
+/* Removed .container h1 override - handled per page or globally if needed */
+/* .container h1 {
+  font-size: 2.2rem; 
+  margin-bottom: 1.5rem;
+} */
+
 /* Removed .logo, .row, #greet-input, button, media query styles */
+
+/* Removed Styling for Settings Page Sections - Moved to SettingsPage.css */
+/* .settings-section { ... } */
+/* .settings-section h2 { ... } */
+/* .settings-section p { ... } */
+
+/* Keep .form-group styles global for now */
+.form-group {
+  margin-bottom: 0.8rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.4rem;
+  color: var(--light-text);
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.form-group input[type="text"],
+.form-group input[type="password"],
+.form-group select {
+  width: 100%;
+  padding: 0.6em 0.8em;
+  font-size: 0.9em;
+  font-family: inherit;
+  color: var(--light-text);
+  background-color: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.form-group input[type="text"]:focus,
+.form-group input[type="password"]:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: var(--secondary-cyan);
+  box-shadow: 0 0 0 2px rgba(0, 255, 255, 0.3);
+}

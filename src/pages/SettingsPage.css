@@ -1,0 +1,207 @@
+/* SettingsPage.css */
+
+.settings-page-layout {
+  /* Takes up available space within the main .container padding */
+}
+
+.settings-page-title {
+  font-size: 1.8rem; /* Smaller than the main H1 override */
+  color: var(--primary-gold);
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.settings-main-content {
+  display: flex;
+  gap: 2rem; /* Space between nav and content */
+}
+
+.settings-nav {
+  flex: 0 0 200px; /* Fixed width for navigation */
+  border-right: 1px solid var(--border-color);
+  padding-right: 2rem;
+}
+
+.settings-nav ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.settings-nav li {
+  margin-bottom: 0.5rem;
+}
+
+.settings-nav button {
+  background: none;
+  border: none;
+  color: var(--light-text);
+  padding: 10px 15px;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font-size: 0.95rem;
+  border-radius: 4px;
+  transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
+}
+
+.settings-nav button:hover {
+  background-color: rgba(255, 255, 255, 0.05); /* Subtle hover */
+  color: var(--secondary-cyan);
+}
+
+.settings-nav button.active {
+  background-color: rgba(0, 255, 255, 0.1); /* Cyan highlight for active */
+  color: var(--secondary-cyan);
+  font-weight: 500;
+}
+
+.settings-content {
+  flex: 1; /* Takes up remaining space */
+  min-width: 0; /* Prevent flex overflow issues */
+}
+
+/* Reuse or adapt .settings-section, .form-group styles from App.css */
+/* We might need to adjust them if App.css styles conflict */
+
+.settings-content-section {
+    /* No changes needed here usually */
+}
+
+.settings-content-section h2 {
+  font-size: 1.3rem;
+  color: var(--primary-gold);
+  margin-bottom: 0.8rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+/* Removed Styles for Template Buttons */
+/* .template-buttons { ... } */
+/* .button-link { ... } */
+
+/* Make sure form styles from App.css apply correctly here */
+/* If not, we can copy/adjust them here or make them more specific in App.css */
+
+/* Example: Ensuring form group styling persists if needed */
+/* .settings-content .form-group { ... } */
+/* .settings-content .form-group label { ... } */
+/* .settings-content .form-group input, .settings-content .form-group select { ... } */
+
+/* Grid for Appearance Controls */
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+/* Styling for color inputs in the grid */
+.form-grid .form-group label {
+    /* Make labels slightly smaller if needed */
+     font-size: 0.85rem;
+}
+
+.form-grid .form-group input[type="color"] {
+    padding: 2px;
+    height: 35px; /* Slightly smaller height */
+    width: 100%;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background-color: transparent;
+    cursor: pointer;
+}
+
+/* Style for secondary button */
+.button-secondary {
+  background-color: rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border-color);
+  color: var(--light-text);
+  padding: 8px 15px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s ease-in-out, border-color 0.2s ease-in-out;
+  font-size: 0.9rem;
+}
+
+.button-secondary:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+  border-color: var(--secondary-cyan);
+}
+
+/* Style for Checkbox Group */
+.checkbox-group {
+    margin-bottom: 1.5rem; 
+}
+
+.checkbox-option {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    padding: 8px 0; 
+}
+
+.checkbox-option input[type="checkbox"] {
+    margin-right: 10px;
+    accent-color: var(--secondary-cyan);
+    width: 16px; 
+    height: 16px;
+}
+
+.checkbox-option span {
+    font-size: 0.95rem;
+    color: var(--light-text);
+}
+
+/* Style for descriptive text below a setting */
+.setting-description {
+    font-size: 0.85rem;
+    color: var(--light-text);
+    opacity: 0.7;
+    margin-top: 0.4rem;
+    padding-left: 5px; 
+    max-width: 90%; 
+}
+
+/* Styles for Radio Button Group */
+.radio-group label:first-of-type {
+    /* Style the main label for the group */
+    display: block;
+    margin-bottom: 0.6rem;
+    color: var(--light-text);
+    font-weight: 500;
+    font-size: 0.9rem;
+}
+
+.radio-options {
+    display: flex;
+    flex-direction: column; /* Stack options vertically */
+    gap: 0.5rem;
+}
+
+.radio-option {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    padding: 8px 10px;
+    border-radius: 4px;
+    background-color: rgba(255, 255, 255, 0.03);
+    transition: background-color 0.2s ease-in-out;
+}
+
+.radio-option:hover {
+    background-color: rgba(255, 255, 255, 0.07);
+}
+
+.radio-option input[type="radio"] {
+    margin-right: 10px;
+    /* Optional: Style the radio button itself if needed */
+    /* Example using accent-color */
+    accent-color: var(--secondary-cyan);
+}
+
+.radio-option span {
+    font-size: 0.9rem;
+    color: var(--light-text);
+} 
