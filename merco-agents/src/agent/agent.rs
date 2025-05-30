@@ -4,7 +4,9 @@ use merco_llmproxy::{
     execute_tool, get_provider, traits::ChatMessageRole,
 };
 use std::sync::Arc;
+use std::fmt;
 
+#[derive(Debug, Clone)]
 pub struct AgentLLMConfig {
     base_config: LlmConfig,
     model_name: String,
@@ -34,6 +36,18 @@ pub struct Agent {
     pub backstory: String,
     pub goals: Vec<String>,
     pub tools: Vec<Tool>,
+}
+
+impl fmt::Debug for Agent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Agent")
+         .field("llm_config", &self.llm_config)
+         .field("provider", &"<LlmProvider>")
+         .field("backstory", &self.backstory)
+         .field("goals", &self.goals)
+         .field("tools", &self.tools)
+         .finish()
+    }
 }
 
 impl Agent {

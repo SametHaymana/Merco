@@ -2199,6 +2199,7 @@ dependencies = [
 name = "merco-agents"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "chrono",
  "ctor 0.4.2",
