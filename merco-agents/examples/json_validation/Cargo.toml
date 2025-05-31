@@ -1,0 +1,12 @@
+[package]
+name = "json_validation"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+merco-agents = { path = "../.." }
+merco-llmproxy = { path = "../../../merco-llmproxy" }
+tokio = { version = "1.41.1", features = ["full"] }
+anyhow = "1.0"
+dotenv = "0.15.0"
+serde_json = "1.0"
