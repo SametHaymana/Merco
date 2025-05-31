@@ -68,31 +68,86 @@ impl Agent {
     }
 
     pub async fn call(&self, task: Task) -> Result<String, String> {
-        let mut messages = vec![
-            ChatMessage::new(
-                ChatMessageRole::System,
-                Some(self.backstory.clone()),
-                None,
-                None,
-            ),
-            ChatMessage::new(
-                ChatMessageRole::User,
-                Some(self.goals.clone().join("\n")),
-                None,
-                None,
-            ),
-            ChatMessage::new(
-                ChatMessageRole::User,
-                Some(format!(
-                    "TASK: {}\nEXPECTED OUTPUT: {}",
-                    task.description,
-                    task.expected_output.unwrap_or("None".to_string())
-                )),
-                None,
-                None,
-            ),
-        ];
+        const MAX_RETRIES: usize = 3;
+        
+        for attempt in 1..=MAX_RETRIES {
+            println!("Agent execution attempt {} of {}", attempt, MAX_RETRIES);
+            
+            let mut messages = vec![
+                ChatMessage::new(
+                    ChatMessageRole::System,
+                    Some(self.backstory.clone()),
+                    None,
+                    None,
+                ),
+                ChatMessage::new(
+                    ChatMessageRole::User,
+                    Some(self.goals.clone().join("\n")),
+                    None,
+                    None,
+                ),
+                ChatMessage::new(
+                    ChatMessageRole::User,
+                    Some(format!(
+                        "TASK: {}\n\nEXPECTED OUTPUT: {}\n\nOUTPUT FORMAT:\n{}",
+                        task.description,
+                        task.expected_output.as_ref().unwrap_or(&"None".to_string()),
+                        task.get_format_prompt() // Include format prompt
+                    )),
+                    None,
+                    None,
+                ),
+            ];
 
+            // Execute the task with the LLM (existing loop logic)
+            let raw_result = match self.execute_with_llm(&mut messages).await {
+                Ok(result) => result,
+                Err(e) => {
+                    if attempt == MAX_RETRIES {
+                        return Err(format!("LLM execution failed after {} attempts: {}", MAX_RETRIES, e));
+                    }
+                    println!("LLM execution failed on attempt {}: {}. Retrying...", attempt, e);
+                    continue;
+                }
+            };
+
+            // Validate the output
+            match task.validate_output(&raw_result) {
+                Ok(()) => {
+                    println!("Output validation successful on attempt {}", attempt);
+                    return Ok(raw_result);
+                }
+                Err(validation_error) => {
+                    if attempt == MAX_RETRIES {
+                        return Err(format!(
+                            "Output validation failed after {} attempts. Last error: {}. Raw output: {}",
+                            MAX_RETRIES, validation_error, raw_result
+                        ));
+                    }
+                    println!(
+                        "Output validation failed on attempt {}: {}. Retrying...", 
+                        attempt, validation_error
+                    );
+                    
+                    // Add feedback message for retry
+                    messages.push(ChatMessage::new(
+                        ChatMessageRole::User,
+                        Some(format!(
+                            "Your previous response was invalid: {}. Please provide a corrected response that follows the required format exactly.",
+                            validation_error
+                        )),
+                        None,
+                        None,
+                    ));
+                }
+            }
+        }
+        
+        Err("Maximum retry attempts exceeded".to_string())
+    }
+
+    // Extracted LLM execution logic (the original loop from call method)
+    async fn execute_with_llm(&self, messages: &mut Vec<ChatMessage>) -> Result<String, String> {
         loop {
             let request = CompletionRequest::new(
                 messages.clone(),
@@ -109,14 +164,13 @@ impl Agent {
                             return Ok(content);
                         }
                         CompletionKind::ToolCall { tool_calls } => {
-                            let assistant_message = ChatMessage {
-                                role: ChatMessageRole::Assistant,
-                                content: None,
-                                tool_call_id: None,
-                                tool_calls: Some(tool_calls.clone()),
-                            };
-                            messages.push(assistant_message);
-
+                            messages.push(ChatMessage::new(
+                                ChatMessageRole::Assistant,
+                                None,
+                                Some(tool_calls.clone()),
+                                None,
+                            ));
+                            
                             for call in tool_calls {
                                 let tool_result_content = match execute_tool(&call.function.name, &call.function.arguments) {
                                     Ok(result) => result,
