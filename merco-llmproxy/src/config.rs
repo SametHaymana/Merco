@@ -1,5 +1,11 @@
 use thiserror::Error;
 
+/// APP site URL
+pub const APP_SITE_URL: &str = "merco.app";
+
+/// APP site name
+pub const APP_SITE_NAME: &str = "Merco LLM";
+
 /// Represents the supported LLM providers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Provider {

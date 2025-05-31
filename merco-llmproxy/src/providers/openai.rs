@@ -5,7 +5,7 @@
 //! of the `LlmProvider` trait for interacting with OpenAI-compatible APIs
 //! (including OpenAI itself and proxies like OpenRouter).
 
-use crate::config::{LlmConfig, Provider};
+use crate::config::{LlmConfig, Provider, APP_SITE_NAME, APP_SITE_URL};
 use crate::traits::{
     ChatMessage, CompletionKind, CompletionRequest, CompletionResponse, CompletionStream,
     CompletionStreamChunk, JsonSchema, LlmProvider, ProviderError, StreamContentDelta, Tool,
@@ -195,6 +195,7 @@ impl OpenAIProvider {
     }
 
     /// Builds the necessary HTTP headers for OpenAI API calls.
+    /// Adds OpenRouter-specific headers if the base URL contains "openrouter".
     fn build_headers(&self) -> HeaderMap {
         let mut headers = HeaderMap::new();
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
@@ -203,6 +204,19 @@ impl OpenAIProvider {
             HeaderValue::from_str(&format!("Bearer {}", self.api_key))
                 .expect("Failed to create auth header"),
         );
+
+        // Add OpenRouter-specific headers if using OpenRouter
+        if self.base_url.to_lowercase().contains("openrouter") {
+            headers.insert(
+                "HTTP-Referer",
+                HeaderValue::from_static(APP_SITE_URL),
+            );
+            headers.insert(
+                "X-Title",
+                HeaderValue::from_static(APP_SITE_NAME  ),
+            );
+        }
+
         headers
     }
 
